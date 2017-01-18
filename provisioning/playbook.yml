@@ -1,0 +1,71 @@
+---
+- name: Set up base configuration on all nodes
+  hosts: all
+  gather_facts: false
+  roles:
+    - common
+
+- name: Configure master node
+  hosts: master
+  gather_facts: true
+  become: true
+  vars:
+    masterip: "{{ hostvars[groups.master[0]]['ansible_default_ipv4']['address'] }}"
+  roles:
+    - ssl
+    - master
+
+- name: Configure minions
+  hosts: minions
+  gather_facts: true
+  become: true
+  vars:
+    masterip: "{{ hostvars[groups.master[0]]['ansible_default_ipv4']['address'] }}"
+  roles:
+    - minion
+
+- name: Define all nodes
+  hosts: master
+  gather_facts: true
+  tasks:
+    - name: Copy json files to master
+      copy:
+        src: "{{ item }}"
+        dest: /tmp/
+      with_fileglob:
+        - /tmp/*_node.json
+    - name: Define nodes in kubectl
+      shell: "kubectl create -f {{ item }}"
+      with_fileglob:
+        - /root/*_node.json
+    - name: Get node list from master
+      shell: kubectl get node
+      register: node_output
+    - name: Debug node list
+      debug:
+        var: node_output.stdout 
+
+- name: Configure flannel on all nodes
+  hosts: all
+  gather_facts: true
+  vars:
+    masterip: "{{ hostvars[groups.master[0]]['ansible_default_ipv4']['address'] }}"
+  roles:
+    - flannel
+  tags:
+    - flannel
+
+- name: Secure kubectl
+  hosts: master
+  vars:
+    masterip: "{{ hostvars[groups.master[0]]['ansible_default_ipv4']['address'] }}"
+  tasks:
+    - command: "{{ item }}"
+      args:
+        chdir: /tmp
+      with_items:
+        - kubectl config set-cluster secure  --certificate-authority=/etc/kubernetes/certs/ca.crt  --embed-certs=false --server=https://{{ masterip }}:6443
+        - kubectl config set-credentials admin --client-key=/etc/kubernetes/certs/{{ ansible_hostname }}.key --client-certificate=/etc/kubernetes/certs/{{ ansible_hostname }}.crt --embed-certs=false
+        - kubectl config set-context secure
+        - kubectl config set-context secure --cluster=secure --user=admin
+        - kubectl config use-context secure

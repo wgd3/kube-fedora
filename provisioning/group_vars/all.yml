@@ -1,0 +1,15 @@
+# define conf file locations
+kube_conf_file: '/etc/kubernetes/config'
+api_conf_file: '/etc/kubernetes/apiserver'
+etcd_conf_file: '/etc/etcd/etcd.conf'
+kubelet_conf_file: '/etc/kubernetes/kubelet'
+flanneld_conf_file: '/etc/sysconfig/flanneld'
+
+# IP configuration
+service_cluster_ip_range: '10.254.0.0/16'
+
+temp_cert_dir: '/tmp/certs/'
+
+common_rpms:
+  - "kubernetes"
+  - "flannel"

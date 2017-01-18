@@ -1,0 +1,117 @@
+---
+- name: Install etcd
+  become: true
+  dnf:
+    name: "etcd"
+    state: latest
+
+- name: Send etcd config
+  template:
+    src: etcd.conf.j2
+    dest: /etc/etcd/etcd.conf
+  with_items:
+    - "{{ groups.master }}"
+
+- name: Send apiserver config
+  template:
+    src: apiserver.j2
+    dest: /etc/kubernetes/apiserver
+  with_items:
+  - "{{ groups.master }}"
+
+- name: Send kubernetes config
+  template:
+    src: config.j2
+    dest: /etc/kubernetes/config
+
+- name: Send controller-manager config
+  template:
+    src: controller-manager.j2
+    dest: /etc/kubernetes/controller-manager
+  with_items:
+    - "{{ groups.master }}"
+
+- name: Send proxy config
+  template:
+    src: proxy.j2
+    dest: /etc/kubernetes/proxy
+
+- name: Send kubernetes scheduler config
+  template:
+    src: scheduler.j2
+    dest: /etc/kubernetes/scheduler
+
+- name: Send kubeconfigs
+  template:
+    src: kubeconfig.j2
+    dest: /etc/kubernetes/{{ item[0] }}.kubeconfig
+  with_nested:
+    - ['controller-manager', 'proxy', 'scheduler']
+    - ["{{ ansible_hostname }}"]
+
+#- name: Update API address
+#  become: true
+#  lineinfile:
+#    dest: "{{ api_conf_file }}"
+#    regexp: '^KUBE_API_ADDRESS'
+#    line: 'KUBE_API_ADDRESS="--address=0.0.0.0"'
+
+#- name: Update etcd server list
+#  become: true
+#  lineinfile:
+#    dest: "{{ api_conf_file }}"
+#    regexp: '^KUBE_ETCD_SERVERS'
+#    line: 'KUBE_ETCD_SERVERS="--etcd-servers=http://127.0.0.1:2379"'
+
+#- name: Update service addresses
+#  become: true
+#  lineinfile:
+#    dest: "{{ api_conf_file }}"
+#    regexp: '^KUBE_SERVICE_ADDRESSES'
+#    line: 'KUBE_SERVICE_ADDRESSES="--service-cluster-ip-range={{ service_cluster_ip_range }}"'
+
+#- name: Update API address
+#  become: true
+#  lineinfile:
+#    dest: "{{ api_conf_file }}"
+#    regexp: '^KUBE_API_ADDRESS'
+#    line: 'KUBE_API_ADDRESS="--address=0.0.0.0"'
+
+#- name: Remove ServiceAccount from admission control
+#  become: true
+#  lineinfile:
+#    dest: "{{ api_conf_file }}"
+#    regexp: '^KUBE_ADMISSION_CONTROL'
+#    line: 'KUBE_ADMISSION_CONTROL="--admission-control=NamespaceLifecycle,NamespaceExists,LimitRanger,SecurityContextDeny,ResourceQuota"'
+
+
+#- name: Update etcd to listen on all interfaces
+#  become: true
+#  lineinfile:
+#    dest: "{{ etcd_conf_file }}"
+#    regexp: '^ETCD_LISTEN_CLIENT_URLS'
+#    line: 'ETCD_LISTEN_CLIENT_URLS="http://0.0.0.0:2379"'
+
+- name: Start and enable all kubernetes services
+  become: true
+  systemd:
+    name: "{{ item }}"
+    enabled: yes
+    state: restarted
+  with_items:
+    - "etcd"
+    - "kube-apiserver"
+    - "kube-controller-manager"
+    - "kube-scheduler"
+
+- name: Create flannel config file
+  become: true
+  copy:
+    src: "{{ role_path }}/files/flannel-config.json"
+    dest: /root/flannel-config.json
+
+- name: Set flannel config
+  become: true
+  shell: etcdctl --endpoint https://{{ item}}:4001 --cert-file /etc/kubernetes/certs/{{ item }}.crt --key-file /etc/kubernetes/certs/{{ item }}.key --ca-file /etc/kubernetes/certs/ca.crt set /coreos.com/network/config < /root/flannel-config.json
+  with_items:
+    - "{{ groups.master }}"  

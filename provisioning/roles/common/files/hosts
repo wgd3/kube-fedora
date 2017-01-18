@@ -1,0 +1,5 @@
+127.0.0.1		localhost.localdomain localhost
+::1		localhost6.localdomain6 localhost6
+192.168.1.20	kube-master.rghq.lan kube-master
+192.168.1.21	kube-minion1.rghq.lan kube-minion1
+192.168.1.22	kube-minion2.rghq.lan kube-minion2

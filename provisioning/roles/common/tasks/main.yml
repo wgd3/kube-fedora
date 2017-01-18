@@ -1,0 +1,34 @@
+---
+- name: Install python and deps for F23 compat
+  become: true
+  raw: dnf install -y python2 python2-dnf libselinux-python
+
+- name: Install kubernetes
+  become: true
+  dnf:
+    name: "kubernetes"
+    state: latest
+
+- name: Update /etc/hosts
+  become: true
+  copy:
+    src: "{{ role_path }}/files/hosts"
+    dest: /etc/hosts
+    backup: true
+
+- name: Configure kubernetes to point to kube-master
+  become: true
+  lineinfile:
+    dest: /etc/kubernetes/config
+    regexp: '^KUBE_MASTER'
+    line: 'KUBE_MASTER="--master=http://kube-master:8080"'
+
+#- name: Stop and disable firewalld and iptables-service
+#  become: true
+#  systemd:
+#    name: "{{ item }}"
+#    enabled: no
+#    state: stopped
+#  with_items:
+#    - "firewalld"
+

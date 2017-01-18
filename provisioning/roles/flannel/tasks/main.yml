@@ -1,0 +1,73 @@
+---
+- name: Install flannel
+  become: true
+  dnf:
+    name: "flannel"
+    state: latest
+
+- name: Send flanneld config
+  become: true
+  template:
+    src: flanneld.j2
+    dest: /etc/sysconfig/flanneld
+  with_items:
+    - "{{ groups.master }}"
+
+#- name: Configure etcd server for flanneld
+#  become: true
+#  lineinfile:
+#    dest: "{{ flanneld_conf_file }}"
+#    regexp: '^FLANNEL_ETCD'
+#    line: 'FLANNEL_ETCD="http://kube-master:2379"'
+
+#- name: Define network config key for flanneld 
+#  become: true
+#  lineinfile:
+#    dest: "{{ flanneld_conf_file }}"
+#    regexp: '^FLANNEL_ETCD_KEY'
+#    line: 'FLANNEL_ETCD_KEY="/coreos.com/network"'
+
+- name: Configure flanneld to use non-vagrant interface
+  become: true
+  lineinfile:
+    dest: "{{ flanneld_conf_file }}"
+    regexp: '^FLANNEL_OPTIONS'
+    line: 'FLANNEL_OPTIONS="--iface=eth1"'
+
+- name: Enabling the flanneld service
+  become: true
+  systemd:
+    name: "flanneld"
+    enabled: yes
+
+- name: Stopping docker service
+  become: true
+  systemd:
+    name: "docker"
+    state: stopped
+  when: "'minion' in inventory_hostname"
+
+- name: Deleting docker0 bridge before starting flanneld
+  become: true
+  shell: ip link delete docker0
+  when: "'minion' in inventory_hostname"
+
+- name: Starting flanneld on all nodes
+  become: true
+  systemd:
+    name: "flanneld"
+    state: started
+
+- name: Starting docker on minions
+  become: true
+  systemd:
+    name: "docker"
+    state: started
+  when: "'minion' in inventory_hostname"
+
+- name: Make sure kubelet comes online
+  become: true
+  systemd:
+    name: "kubelet"
+    state: started
+  when: "'minion' in inventory_hostname"

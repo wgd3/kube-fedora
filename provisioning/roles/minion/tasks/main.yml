@@ -1,0 +1,72 @@
+---
+- name: Copy certs to minions
+  become: true
+  synchronize:
+    src: "{{ temp_cert_dir }}"
+    dest: /etc/kubernetes/certs/
+
+- name: Copy kubernetes config
+  template:
+    src: config.j2
+    dest: /etc/kubernetes/config
+
+- name: Copy proxy config
+  template:
+    src: proxy.j2
+    dest: /etc/kubernetes/proxy
+
+- name: Copy kubeconfigs
+  template:
+    src: kubeconfig.j2
+    dest: /etc/kubernetes/{{ item[0] }}.kubeconfig
+  with_nested:
+    - ['kubelet', 'proxy']
+    - ["{{ ansible_hostname }}"]
+
+- name: Copy kubelet config
+  template:
+    src: kubelet.j2
+    dest: /etc/kubernetes/kubelet
+
+- name: Update kubelet address
+  become: true
+  lineinfile:
+    dest: "{{ kubelet_conf_file }}"
+    regexp: '^KUBELET_ADDRESS'
+    line: 'KUBELET_ADDRESS="--address=0.0.0.0"'
+
+- name: Update kubelet hostname
+  become: true
+  lineinfile:
+    dest: "{{ kubelet_conf_file }}"
+    regexp: '^KUBELET_HOSTNAME'
+    line: 'KUBELET_HOSTNAME="--hostname-override={{ ansible_hostname }}"'
+
+- name: Update kubelet API server
+  become: true
+  lineinfile:
+    dest: "{{ kubelet_conf_file }}"
+    regexp: '^KUBELET_API_SERVER'
+    line: 'KUBELET_API_SERVER="--api-servers=http://kube-master:8080"'
+
+- name: Start kubelet services
+  become: true
+  systemd:
+    name: "{{ item }}"
+    state: restarted
+    enabled: yes
+  with_items:
+    - "kube-proxy"
+    - "kubelet"
+    - "docker"
+
+- name: Create node.json
+  template:
+    src: "{{ role_path }}/templates/node.j2"
+    dest: "/tmp/{{ ansible_hostname }}_node.json"
+
+- name: Fetch node.json to ansible host
+  fetch:
+    src: "/tmp/{{ ansible_hostname }}_node.json"
+    dest: /tmp/
+    flat: yes  
